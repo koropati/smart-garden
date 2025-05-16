@@ -15,5 +15,7 @@ router.post('/device-control', isAuthenticated, dashboardController.controlDevic
 // API routes for dashboard data
 router.get('/sensor-data', isAuthenticated, dashboardController.getSensorData);
 router.get('/device-logs', isAuthenticated, dashboardController.getDeviceLogs);
+router.get('/sensor-history', isAuthenticated, dashboardController.getSensorHistory);
+router.get('/export-sensor-data', isAuthenticated, dashboardController.exportSensorData);
 
 module.exports = router;

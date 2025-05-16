@@ -191,10 +191,185 @@ const controlDevice = (req, res) => {
     });
 };
 
+// Get sensor history with pagination
+const getSensorHistory = (req, res) => {
+    const { type = 'temperature', page = 1, limit = 20, startDate, endDate } = req.query;
+    const pageNumber = parseInt(page) || 1;
+    const limitPerPage = parseInt(limit) || 20;
+    const offset = (pageNumber - 1) * limitPerPage;
+    
+    // Define allowed sensor types
+    const allowedTypes = ['temperature', 'humidity', 'soil_moisture', 'all'];
+    
+    if (!allowedTypes.includes(type)) {
+        return res.status(400).render('error', {
+            error: { message: 'Invalid sensor type' }
+        });
+    }
+    
+    const db = getDb();
+    let params = [];
+    let typeFilter = '';
+    
+    if (type !== 'all') {
+        typeFilter = 'WHERE sensor_type = ?';
+        params.push(type);
+    }
+    
+    // Add date filtering if provided
+    let dateFilter = '';
+    if (startDate && endDate) {
+        dateFilter = type !== 'all' ? ' AND' : ' WHERE';
+        dateFilter += ' timestamp BETWEEN ? AND ?';
+        params.push(startDate, endDate);
+    } else if (startDate) {
+        dateFilter = type !== 'all' ? ' AND' : ' WHERE';
+        dateFilter += ' timestamp >= ?';
+        params.push(startDate);
+    } else if (endDate) {
+        dateFilter = type !== 'all' ? ' AND' : ' WHERE';
+        dateFilter += ' timestamp <= ?';
+        params.push(endDate);
+    }
+    
+    // Get total count for pagination
+    const countQuery = `
+        SELECT COUNT(*) as total
+        FROM sensor_data
+        ${typeFilter}${dateFilter}
+    `;
+    
+    db.get(countQuery, params, (err, countResult) => {
+        if (err) {
+            console.error('Database error:', err);
+            return res.status(500).render('error', {
+                error: { message: 'Database error', stack: err.stack }
+            });
+        }
+        
+        const total = countResult.total;
+        const totalPages = Math.ceil(total / limitPerPage);
+        
+        // Get data with pagination
+        const dataQuery = `
+            SELECT id, sensor_type, value, timestamp
+            FROM sensor_data
+            ${typeFilter}${dateFilter}
+            ORDER BY timestamp DESC
+            LIMIT ? OFFSET ?
+        `;
+        
+        const dataParams = [...params, limitPerPage, offset];
+        
+        db.all(dataQuery, dataParams, (err, rows) => {
+            if (err) {
+                console.error('Database error:', err);
+                return res.status(500).render('error', {
+                    error: { message: 'Database error', stack: err.stack }
+                });
+            }
+            
+            // Format data for display
+            const formattedData = rows.map(row => ({
+                id: row.id,
+                sensorType: row.sensor_type,
+                value: row.value,
+                timestamp: new Date(row.timestamp)
+            }));
+            
+            res.render('dashboard/sensor-history', {
+                title: 'History Data Sensor',
+                user: req.session.user,
+                data: formattedData,
+                currentPage: pageNumber,
+                totalPages,
+                totalItems: total,
+                type,
+                limit: limitPerPage,
+                startDate,
+                endDate
+            });
+        });
+    });
+};
+
+const exportSensorData = (req, res) => {
+    const { type = 'temperature', startDate, endDate } = req.query;
+    
+    // Define allowed sensor types
+    const allowedTypes = ['temperature', 'humidity', 'soil_moisture', 'all'];
+    
+    if (!allowedTypes.includes(type)) {
+        return res.status(400).send('Invalid sensor type');
+    }
+    
+    const db = getDb();
+    let params = [];
+    let typeFilter = '';
+    
+    if (type !== 'all') {
+        typeFilter = 'WHERE sensor_type = ?';
+        params.push(type);
+    }
+    
+    // Add date filtering if provided
+    let dateFilter = '';
+    if (startDate && endDate) {
+        dateFilter = type !== 'all' ? ' AND' : ' WHERE';
+        dateFilter += ' timestamp BETWEEN ? AND ?';
+        params.push(startDate, endDate);
+    } else if (startDate) {
+        dateFilter = type !== 'all' ? ' AND' : ' WHERE';
+        dateFilter += ' timestamp >= ?';
+        params.push(startDate);
+    } else if (endDate) {
+        dateFilter = type !== 'all' ? ' AND' : ' WHERE';
+        dateFilter += ' timestamp <= ?';
+        params.push(endDate);
+    }
+    
+    const query = `
+        SELECT sensor_type, value, timestamp
+        FROM sensor_data
+        ${typeFilter}${dateFilter}
+        ORDER BY timestamp DESC
+    `;
+    
+    db.all(query, params, (err, rows) => {
+        if (err) {
+            console.error('Database error:', err);
+            return res.status(500).send('Database error');
+        }
+        
+        // Format data for CSV
+        const formattedData = rows.map(row => ({
+            sensor_type: row.sensor_type === 'temperature' ? 'Suhu' : 
+                        row.sensor_type === 'humidity' ? 'Kelembaban Udara' : 'Kelembaban Tanah',
+            value: row.value.toFixed(1) + (row.sensor_type === 'temperature' ? ' °C' : ' %'),
+            timestamp: new Date(row.timestamp).toLocaleString('id-ID')
+        }));
+        
+        // Create CSV content
+        let csv = 'Tipe Sensor,Nilai,Tanggal & Waktu\n';
+        formattedData.forEach(item => {
+            csv += `"${item.sensor_type}","${item.value}","${item.timestamp}"\n`;
+        });
+        
+        // Set headers for file download
+        const today = new Date().toISOString().split('T')[0];
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename=sensor_data_${today}.csv`);
+        
+        res.send(csv);
+    });
+};
+
 module.exports = {
     getDashboard,
     getSensorData,
     getDeviceLogs,
     getDeviceControl,
-    controlDevice
+    controlDevice,
+    getSensorHistory,
+    exportSensorData
 };
