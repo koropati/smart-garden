@@ -103,10 +103,10 @@ MQTT_CA_FILE=data/certs/isrgrootx1.pem
 Edit file `.env` untuk menyesuaikan konfigurasi MQTT dengan broker Anda:
 
 ```
-MQTT_HOST=3895fc47c772499f9963cb3b380dfb13.s1.eu.hivemq.cloud
+MQTT_HOST=xxxxxxxxxxxxxxxxxxxxxxxxx
 MQTT_PORT=8883
-MQTT_USERNAME=smart_garden
-MQTT_PASSWORD=G44rdeninggg555
+MQTT_USERNAME=xxxxxxxxxxxxxxxxxxxx
+MQTT_PASSWORD=xxxxxxxxxxxxxxxxxxx
 MQTT_CLIENT_ID=smart-garden-dashboard
 MQTT_USE_SSL=true
 MQTT_CA_FILE=data/certs/isrgrootx1.pem
